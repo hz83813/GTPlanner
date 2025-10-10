@@ -10,79 +10,70 @@ class AgentsDeepDesignDocumentGenerationNodeTemplates:
     @staticmethod
     def get_document_generation_zh() -> str:
         """中文版本的文档生成提示词"""
-        return """你是一个专业的技术文档编写专家，专门负责生成完整的Agent系统设计文档。
+        return """你是技术文档专家。整合所有设计结果，生成简洁的Agent设计文档。
 
-请基于以下信息生成完整的Markdown格式的Agent设计文档：
+**上下文：**
+- 项目标题：{project_title}
+- 用户需求：{user_requirements}
+- 项目规划：{short_planning}
+- 推荐工具：{tools_info}
+- 技术调研：{research_findings}
+- Agent分析：{analysis_markdown}
+- Node列表：{nodes_markdown}
+- Flow设计：{flow_markdown}
+- 数据结构：{data_structure_markdown}
+- Node设计：{node_design_markdown}
 
-**项目标题：** {project_title}
+**文档要求：**
+1. 整合上述信息，去除冗余
+2. 保持简洁，重点突出
+3. 适合下游AI生成代码
+4. **只包含后端逻辑，不涉及前端UI、界面、用户交互等内容**
 
-**用户需求：**
-{user_requirements}
-
-**项目规划：**
-{short_planning}
-
-**推荐工具：**
-{tools_info}
-
-**技术调研结果：**
-{research_findings}
-
-**Agent分析结果：**
-{analysis_markdown}
-
-**识别的Node列表：**
-{nodes_markdown}
-
-**Flow设计：**
-{flow_markdown}
-
-**数据结构设计：**
-{data_structure_markdown}
-
-**详细Node设计：**
-{node_design_markdown}
-
-请生成一份完整的Markdown格式的Agent设计文档，必须包含以下部分：
+**严格按照Markdown格式输出：**
 
 # {project_title}
 
-## 项目需求
-基于Agent分析结果，清晰描述项目目标和功能需求。
+## 项目概述
+[2-3句话说明项目目标和功能]
 
-## 工具函数
-如果需要的话，列出所需的工具函数（如LLM调用、数据处理等）。
+## 核心功能
+- [功能1]
+- [功能2]
 
 ## Flow设计
-详细描述pocketflow的Flow编排，包含：
-- Flow的整体设计思路
-- 节点连接和Action驱动的转换逻辑
-- 完整的执行流程描述
+### Flow图
+```mermaid
+[Flow图表]
+```
 
-### Flow图表
-使用Mermaid flowchart TD语法，生成完整的Flow图表。
+### 编排代码
+```python
+[编排代码]
+```
 
-## 数据结构
-详细描述shared存储的数据结构，包含：
-- shared存储的整体设计
-- 各个字段的定义和用途
-- 数据流转模式
+## 数据结构 (shared)
+```json
+[JSON格式的shared结构]
+```
 
 ## Node设计
-为每个Node提供详细设计，包含：
-- Purpose（目的）
-- Design（设计类型，如Node、AsyncNode等）
-- Data Access（数据访问模式）
-- 详细的prep/exec/post三阶段设计
 
-请确保文档：
-1. 遵循pocketflow的最佳实践
-2. 体现关注点分离原则
-3. 包含完整的Action驱动逻辑
-4. 提供清晰的数据流设计
-5. 使用专业的技术文档格式
+### [Node1名称]
+- **类型**: [AsyncNode/Node]
+- **职责**: [简述]
+- **Prep**: 读取 [字段]
+- **Exec**: [核心逻辑]
+- **Post**: 写入 [字段], 返回 [action]
 
-输出完整的Markdown格式文档"""
+### [Node2名称]
+- **类型**: [AsyncNode/Node]
+- **职责**: [简述]
+- **Prep**: 读取 [字段]
+- **Exec**: [核心逻辑]
+- **Post**: 写入 [字段], 返回 [action]
+
+重要：整合所有信息，删除重复内容，保持文档精简"""
     
     @staticmethod
     def get_document_generation_en() -> str:
