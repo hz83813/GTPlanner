@@ -234,7 +234,7 @@ jobs:
         # Update the deployment using the provided API
         curl -X PATCH \
           -H "content-type: application/strategic-merge-patch+json" \
-          -H "Authorization: $K8S_TOKEN" \
+          -H "Authorization: Bearer $K8S_TOKEN" \
           -d "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"gtplanner\",\"image\":\"$IMAGE_TAG\"}]}}}}" \
           "$K8S_API_URL/apis/apps/v1/namespaces/$NAMESPACE/deployments/$DEPLOYMENT_NAME"
         
@@ -252,7 +252,7 @@ jobs:
         
         # Check deployment status
         for i in {1..30}; do
-          STATUS=$(curl -s -H "Authorization:  $K8S_TOKEN" \
+          STATUS=$(curl -s -H "Authorization: Bearer $K8S_TOKEN" \
             "$K8S_API_URL/apis/apps/v1/namespaces/$NAMESPACE/deployments/$DEPLOYMENT_NAME" | \
             jq -r '.status.conditions[] | select(.type=="Progressing") | .status')
           
@@ -286,7 +286,10 @@ jobs:
 
     - name: Deploy to Test Kubernetes
       env:
-        K8S_TEST_TOKEN: ${{ secrets.K8S_TEST_TOKEN }}
+        K8S_TOKEN: ${{ secrets.K8S_TOKEN }}
+        K8S_API_URL: ${{ secrets.K8S_API_URL }}
+        NAMESPACE: ${{ secrets.NAMESPACE }}
+        DEPLOYMENT_TEST_NAME: ${{ secrets.DEPLOYMENT_TEST_NAME }}
         VERSION: ${{ github.sha }}
       run: |
         # 使用测试环境的镜像
@@ -295,27 +298,32 @@ jobs:
         echo "Deploying test image: $IMAGE_TAG"
         echo "Branch: ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
         echo "Commit: ${GITHUB_SHA::7}"
+        echo "Namespace: $NAMESPACE"
+        echo "Deployment: $DEPLOYMENT_TEST_NAME"
 
-        # 使用您提供的测试环境K8s部署脚本
+        # 使用生产环境K8s集群部署到测试deployment
         curl -X PATCH \
           -H "content-type: application/strategic-merge-patch+json" \
-          -H "Authorization:Bearer $K8S_TEST_TOKEN" \
-          -d "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"gt-planner-backend-test\",\"image\":\"$IMAGE_TAG\"}]}}}}" \
-          "http://kuboard.sensedeal.wiki/k8s-api/apis/apps/v1/namespaces/agent-build/deployments/gt-planner-backend-test"
+          -H "Authorization: Bearer $K8S_TOKEN" \
+          -d "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$DEPLOYMENT_TEST_NAME\",\"image\":\"$IMAGE_TAG\"}]}}}}" \
+          "$K8S_API_URL/apis/apps/v1/namespaces/$NAMESPACE/deployments/$DEPLOYMENT_TEST_NAME"
 
         echo "Test deployment updated successfully"
 
     - name: Verify test deployment
       env:
-        K8S_TEST_TOKEN: ${{ secrets.K8S_TEST_TOKEN }}
+        K8S_TOKEN: ${{ secrets.K8S_TOKEN }}
+        K8S_API_URL: ${{ secrets.K8S_API_URL }}
+        NAMESPACE: ${{ secrets.NAMESPACE }}
+        DEPLOYMENT_TEST_NAME: ${{ secrets.DEPLOYMENT_TEST_NAME }}
       run: |
         # 等待测试部署完成
         echo "Waiting for test deployment to complete..."
 
         # 检查部署状态
         for i in {1..30}; do
-          STATUS=$(curl -s -H "Authorization: Bearer $K8S_TEST_TOKEN" \
-            "http://kuboard.sensedeal.wiki/k8s-api/apis/apps/v1/namespaces/agent-build/deployments/gt-planner-backend-test" | \
+          STATUS=$(curl -s -H "Authorization: Bearer $K8S_TOKEN" \
+            "$K8S_API_URL/apis/apps/v1/namespaces/$NAMESPACE/deployments/$DEPLOYMENT_TEST_NAME" | \
             jq -r '.status.conditions[] | select(.type=="Progressing") | .status' 2>/dev/null || echo "Unknown")
 
           if [ "$STATUS" = "True" ]; then
@@ -328,10 +336,13 @@ jobs:
         done
 
     - name: 测试部署成功通知
+      env:
+        NAMESPACE: ${{ secrets.NAMESPACE }}
+        DEPLOYMENT_TEST_NAME: ${{ secrets.DEPLOYMENT_TEST_NAME }}
       run: |
         BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
         echo "🧪 测试环境部署成功!"
         echo "分支: $BRANCH_NAME"
         echo "镜像: ${{ needs.docker-build-push-test.outputs.full-image-name }}"
-        echo "命名空间: agent-build"
-        echo "Deployment: gt-planner-backend-test"
+        echo "命名空间: $NAMESPACE"
+        echo "Deployment: $DEPLOYMENT_TEST_NAME"
