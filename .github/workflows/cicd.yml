@@ -8,6 +8,13 @@ on:
       - 'v*'
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests and linting'
+        required: false
+        default: false
+        type: boolean
 
 env:
   IMAGE_NAME: gtplanner
@@ -19,6 +26,7 @@ jobs:
 
   build-and-test:
     runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
 
     steps:
     - name: Checkout代码
@@ -152,7 +160,7 @@ jobs:
   docker-build-push-test:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && (needs.build-and-test.result == 'success' || inputs.skip_tests)
     permissions:
       contents: read
       packages: write
@@ -278,7 +286,7 @@ jobs:
   deploy-to-test-kubernetes:
     needs: docker-build-push-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
 
     steps:
     - name: Checkout代码
