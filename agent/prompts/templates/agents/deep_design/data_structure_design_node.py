@@ -10,49 +10,42 @@ class AgentsDeepDesignDataStructureDesignNodeTemplates:
     @staticmethod
     def get_data_structure_design_zh() -> str:
         """中文版本的数据结构设计提示词"""
-        return """你是一位精通PocketFlow框架的数据架构专家。
+        return """你是pocketflow数据架构专家。设计简洁的`shared`数据结构。
 
-你的唯一任务是基于下方提供的上下文，设计一个简洁、高效的`shared`共享数据字典，并严格按照指定的JSON格式输出。
+**上下文：**
+- Agent分析：{analysis_markdown}
+- Node列表：{nodes_markdown}
+- Flow设计：{flow_markdown}
+- 用户需求：{user_requirements}
+- 项目规划：{short_planning}
+- 技术调研：{research_info}
+- 推荐工具：{tools_info}
 
-**上下文信息：**
-- **Agent分析结果：** {analysis_markdown}
-- **Node识别结果：** {nodes_markdown}
-- **Flow设计：** {flow_markdown}
-- **用户需求：** {user_requirements}
-- **项目规划：** {short_planning}
-- **技术调研结果：** {research_info}
-- **推荐工具：** {tools_info}
+**核心要求：**
+1. 只定义Node间传递的核心字段
+2. 所有描述控制在15字内
+3. 严格输出JSON，无额外注释
 
-**核心指令：**
-1.  **聚焦于`shared`结构**：仅定义在Node之间传递的核心字段。
-2.  **保持简洁**：所有描述性文字（如description, purpose）都应简明扼要，控制在25个字以内。
-3.  **严格JSON输出**：最终输出必须是一个完整的、无任何额外注释或解释的JSON对象。
-
-**请严格按照以下JSON格式输出：**
+**严格按照JSON格式输出：**
 {{
-    "shared_structure_description": "一句话描述该`shared`结构的总体用途。",
-    "shared_fields": [
+    "shared_description": "一句话说明",
+    "fields": [
         {{
-            "field_name": "字段名称",
-            "data_type": "核心数据类型 (例如: str, int, list[dict], bool)",
-            "description": "字段的简短描述",
-            "purpose": "此字段在流程中的核心作用",
-            "constraints": "关键约束条件 (例如: 'required', 'optional', 'not null', 'enum: [A, B]')",
-            "io_nodes": {{
-                "written_by": ["写入此字段的Node"],
-                "read_by": ["读取此字段的Node_A", "读取此字段的Node_B"]
-            }},
-            "example_value": "一个清晰、简单的值示例"
+            "name": "字段名",
+            "type": "数据类型",
+            "description": "简述(15字内)",
+            "written_by": ["Node名"],
+            "read_by": ["Node名"],
+            "example": "示例值"
         }}
     ],
-    "shared_example": {{
-        "comment": "展示`shared`对象在流程关键节点的一个完整示例。",
-        "data": {{
-            "field_name_1": "示例值",
-            "field_name_2": []
-        }}
+    "example": {{
+        "field1": "值",
+        "field2": []
     }}
-}}"""
+}}
+
+重要：只输出JSON，无其他说明"""
     
     @staticmethod
     def get_data_structure_design_en() -> str:
