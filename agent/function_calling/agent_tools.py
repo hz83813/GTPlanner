@@ -10,8 +10,8 @@ from typing import Dict, List, Any, Optional
 
 # 导入现有的子Agent流程
 from agent.subflows.short_planning.flows.short_planning_flow import ShortPlanningFlow
-from agent.subflows.deep_design_docs.flows.deep_design_docs_flow import ArchitectureFlow
 from agent.subflows.research.flows.research_flow import ResearchFlow
+# DesignFlow 在 _execute_design 中动态导入
 
 
 def get_agent_function_definitions() -> List[Dict[str, Any]]:
@@ -133,24 +133,28 @@ def get_agent_function_definitions() -> List[Dict[str, Any]]:
         "type": "function",
         "function": {
             "name": "design",
-            "description": "**『技术实现』阶段的终点和收尾工具**。它综合所有前期成果（已确认的范围和技术选型），生成最终的系统架构方案。调用此工具意味着整个规划流程的结束。`user_requirements`参数**必须**使用在『范围确认』阶段与用户达成共识的最终版本。\n\n**设计模式选择**：\n- **quick**（快速设计）：适合简单项目，流程简化，直接生成设计文档，耗时约2-3分钟\n- **deep**（深度设计）：适合复杂项目，包含完整的需求分析和架构设计流程，耗时约15分钟，请耐心等待",
+            "description": "生成系统设计文档（design.md）。这是一个原子化的工具，所有需要的信息都通过参数显式传入。如果之前调用了 short_planning、tool_recommend 或 research，可以将它们的结果作为可选参数传入，以生成更完善的设计文档。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "user_requirements": {
                         "type": "string",
-                        "description": "用户的项目需求描述，用于指导架构设计。如果不提供，将使用之前short_planning工具的结果。"
+                        "description": "用户的项目需求描述（必需）"
                     },
-                    "design_mode": {
+                    "project_planning": {
                         "type": "string",
-                        "enum": ["quick", "deep"],
-                        "description": "设计模式选择：'quick'=快速设计（适合简单项目，2-3分钟），'deep'=深度设计（适合复杂项目，约15分钟）"
+                        "description": "项目规划内容（可选）。如果之前调用了 short_planning，可以将其结果传入"
+                    },
+                    "recommended_tools": {
+                        "type": "string",
+                        "description": "推荐工具信息（可选）。如果之前调用了 tool_recommend，可以将其结果的 JSON 字符串传入"
+                    },
+                    "research_findings": {
+                        "type": "string",
+                        "description": "技术调研结果（可选）。如果之前调用了 research，可以将其结果的 JSON 字符串传入"
                     }
                 },
-                "required": [
-                    "user_requirements",
-                    "design_mode"
-                ]
+                "required": ["user_requirements"]
             }
         }
     }
@@ -431,75 +435,86 @@ async def _execute_research(arguments: Dict[str, Any], shared: Dict[str, Any] = 
 
 
 async def _execute_design(arguments: Dict[str, Any], shared: Dict[str, Any] = None) -> Dict[str, Any]:
-    """执行设计 - 基于shared字典中的状态数据和用户需求参数"""
-
-    # 验证shared字典是否可用
-    if not shared:
+    """
+    执行设计 - 原子化工具，所有参数显式传入
+    
+    参数：
+    - user_requirements: 必需，用户需求描述
+    - project_planning: 可选，项目规划内容（如果之前调用了 short_planning）
+    - recommended_tools: 可选，推荐工具信息（JSON 字符串）
+    - research_findings: 可选，技术调研结果（JSON 字符串）
+    """
+    import json
+    
+    # 验证必需参数
+    user_requirements = arguments.get("user_requirements")
+    if not user_requirements:
         return {
             "success": False,
-            "error": "shared context is required for  design"
+            "error": "user_requirements is required"
         }
-
-    # 验证必需的状态数据是否存在
-    if not shared.get("short_planning"):
-        return {
-            "success": False,
-            "error": "short_planning results are required for  design"
-        }
-
-    # 从参数中获取用户需求，如果没有则使用short_planning结果
-    user_requirements = arguments.get("user_requirements", shared.get("short_planning", ""))
-    if user_requirements:
-        shared["user_requirements"] = user_requirements
-
-    # 获取设计模式参数
-    design_mode_param = arguments.get("design_mode")
-
-    # 验证设计模式参数
-    if design_mode_param not in ["quick", "deep"]:
-        return {
-            "success": False,
-            "error": "design_mode must be either 'quick' or 'deep'"
-        }
-
+    
+    # 获取可选参数（显式传入，不从 shared 读取）
+    project_planning = arguments.get("project_planning", "")
+    recommended_tools_str = arguments.get("recommended_tools", "")
+    research_findings_str = arguments.get("research_findings", "")
+    
+    # 解析 JSON 字符串
+    recommended_tools = []
+    if recommended_tools_str:
+        try:
+            recommended_tools = json.loads(recommended_tools_str)
+        except:
+            pass
+    
+    research_findings = {}
+    if research_findings_str:
+        try:
+            research_findings = json.loads(research_findings_str)
+        except:
+            pass
+    
     try:
-        # 根据用户选择的设计模式选择流程
-        if design_mode_param == "deep":
-            # 使用深度设计模式（原architecture模块的循序渐进逻辑）
-            flow = ArchitectureFlow()
-            design_mode = "深度设计"
-        else:  # quick
-            # 使用快速设计模式（复用planning.py的简单逻辑）
-            from agent.subflows.quick_design.flows.quick_design_flow import QuickDesignFlow
-            flow = QuickDesignFlow()
-            design_mode = "快速设计"
-
-        print(f"🎯 使用{design_mode}模式生成设计文档...")
-
-        # 直接使用shared字典执行流程，确保状态传递
-        result = await flow.run_async(shared)
-
-        # 从shared字典中获取结果（PocketFlow已经直接修改了shared）
-        agent_design_document = shared.get("agent_design_document", {})
-
-        # 判断成功的条件：流程执行完成且有设计文档结果
+        # 创建独立的流程 shared 字典（不污染全局 shared）
+        flow_shared = {
+            "user_requirements": user_requirements,
+            "short_planning": project_planning,  # 向后兼容字段名
+            "recommended_tools": recommended_tools,
+            "research_findings": research_findings,
+            "language": shared.get("language") if shared else None,  # 保留全局配置
+            "streaming_session": shared.get("streaming_session") if shared else None  # 🔑 关键：传递 streaming_session
+        }
+        
+        # 使用新的统一 DesignFlow
+        from agent.subflows.design.flows.design_flow import DesignFlow
+        flow = DesignFlow()
+        
+        print("🎨 生成设计文档...")
+        
+        # 执行流程
+        result = await flow.run_async(flow_shared)
+        
+        # 从流程 shared 中获取结果
+        agent_design_document = flow_shared.get("agent_design_document", "")
+        
+        # 如果全局 shared 存在，将结果同步回去（供后续使用）
+        if shared:
+            shared["agent_design_document"] = agent_design_document
+            shared["documentation"] = agent_design_document
+        
+        # 判断成功
         if result and agent_design_document:
             return {
                 "success": True,
-                "message": f"✅ {design_mode}执行成功，设计文档已生成",
-                "tool_name": "design",
-                "design_mode": design_mode
+                "message": "✅ 设计文档生成成功",
+                "document": agent_design_document,
+                "tool_name": "design"
             }
         else:
-            # 检查是否有错误信息
-            error_msg = shared.get('last_error', {}).get('error_message') or \
-                       shared.get('architecture_flow_error') or \
-                       shared.get('quick_design_flow_error') or \
-                       f"{design_mode}执行失败：未生成设计文档"
+            error_msg = flow_shared.get('design_flow_error') or "设计文档生成失败：未生成文档"
             return {
                 "success": False,
-                "error": error_msg,
-                "design_mode": design_mode
+                "error": error_msg
             }
     except Exception as e:
         return {
@@ -602,14 +617,25 @@ async def call_tool_recommend(
     return await execute_agent_tool("tool_recommend", arguments)
 
 
-async def call_design(user_requirements: str = None, design_mode: str = "quick") -> Dict[str, Any]:
-    """便捷的架构设计调用 - 支持传入用户需求和设计模式选择
+async def call_design(
+    user_requirements: str,
+    project_planning: str = None,
+    recommended_tools: str = None,
+    research_findings: str = None
+) -> Dict[str, Any]:
+    """便捷的设计文档生成调用 - 原子化工具
 
     Args:
-        user_requirements: 用户需求描述
-        design_mode: 设计模式，'quick'（快速设计，2-3分钟）或 'deep'（深度设计，约15分钟）
+        user_requirements: 用户需求描述（必需）
+        project_planning: 项目规划内容（可选）
+        recommended_tools: 推荐工具信息 JSON 字符串（可选）
+        research_findings: 技术调研结果 JSON 字符串（可选）
     """
-    arguments = {"design_mode": design_mode}
-    if user_requirements:
-        arguments["user_requirements"] = user_requirements
+    arguments = {"user_requirements": user_requirements}
+    if project_planning:
+        arguments["project_planning"] = project_planning
+    if recommended_tools:
+        arguments["recommended_tools"] = recommended_tools
+    if research_findings:
+        arguments["research_findings"] = research_findings
     return await execute_agent_tool("design", arguments)
