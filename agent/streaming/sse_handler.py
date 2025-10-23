@@ -183,6 +183,14 @@ class SSEStreamHandler(StreamHandler):
             self._is_message_active = False
             self._message_buffer = ""
 
+            # 追加：发送一个 debug 状态，帮助定位尾部卡顿
+            await self._send_status_update(
+                "assistant_message_end",
+                {
+                    "timestamp": event.timestamp
+                }
+            )
+
     async def _handle_tool_start(self, event: StreamEvent) -> None:
         """处理工具调用开始事件"""
         tool_name = event.data.get("tool_name", "unknown")

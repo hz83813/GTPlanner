@@ -190,6 +190,14 @@ class StatelessGTPlanner:
             )
         )
 
+        # 追加一条状态事件用于定位尾部卡顿（SSE 调试）
+        await session.emit_event(
+            StreamEventBuilder.processing_status(
+                session.session_id,
+                "[debug] LLM output completed"
+            )
+        )
+
     @staticmethod
     async def _on_tool_start(
         session: StreamingSession,
