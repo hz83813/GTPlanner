@@ -35,23 +35,30 @@ def get_agent_function_definitions() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "short_planning",
-                "description": "定义和细化项目范围的核心工具，支持两个阶段的规划：\n1. **初始规划阶段** (planning_stage='initial')：专注于需求分析和功能定义，不涉及技术选型\n2. **技术规划阶段** (planning_stage='technical')：在调用工具推荐后，整合推荐的技术栈和工具选择\n\n此工具旨在根据用户反馈被**重复调用**，直到与用户就项目范围达成最终共识。当用户提出修改意见时，应使用`improvement_points`参数来更新范围。",
+                "description": "生成项目的步骤化实施计划。这是一个原子化的工具，所有需要的信息都通过参数显式传入。如果之前调用了 tool_recommend 或 research，可以将它们的结果作为可选参数传入，以生成更完善的规划。此工具可以根据用户反馈被**重复调用**，直到与用户就项目规划达成最终共识。",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "user_requirements": {
                             "type": "string",
-                            "description": "用户的原始需求描述或新的需求补充"
+                            "description": "用户的项目需求描述（必需）"
+                        },
+                        "previous_planning": {
+                            "type": "string",
+                            "description": "之前的规划内容（可选）。如果用户对之前的规划提出了修改意见，可以传入"
                         },
                         "improvement_points": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "需要改进的点或新的需求"
+                            "description": "用户提出的改进点或补充需求（可选）"
                         },
-                        "planning_stage": {
+                        "recommended_tools": {
                             "type": "string",
-                            "enum": ["initial", "technical"],
-                            "description": "规划阶段：'initial'表示初始需求规划阶段，不涉及技术选型；'technical'表示技术规划阶段，需要整合推荐的技术栈和工具"
+                            "description": "推荐工具信息（可选）。如果之前调用了 tool_recommend，可以将其结果的 JSON 字符串传入"
+                        },
+                        "research_findings": {
+                            "type": "string",
+                            "description": "技术调研结果（可选）。如果之前调用了 research，可以将其结果的 JSON 字符串传入"
                         }
                     },
                     "required": ["user_requirements"]
@@ -201,63 +208,40 @@ async def execute_agent_tool(tool_name: str, arguments: Dict[str, Any], shared: 
 
 
 async def _execute_short_planning(arguments: Dict[str, Any], shared: Dict[str, Any] = None) -> Dict[str, Any]:
-    """执行短期规划 - 基于项目状态和用户需求，支持不同规划阶段"""
+    """执行短期规划 - 原子化工具，所有参数显式传入"""
     user_requirements = arguments.get("user_requirements", "")
+    previous_planning = arguments.get("previous_planning", "")
     improvement_points = arguments.get("improvement_points", [])
-    planning_stage = arguments.get("planning_stage", "initial")  # 默认为初始阶段
+    recommended_tools = arguments.get("recommended_tools", "")
+    research_findings = arguments.get("research_findings", "")
 
-    # 验证planning_stage参数
-    if planning_stage not in ["initial", "technical"]:
+    # 验证必需参数
+    if not user_requirements:
         return {
             "success": False,
-            "error": "planning_stage must be either 'initial' or 'technical'"
-        }
-
-    # 从shared字典中获取之前的规划结果
-    previous_planning = ""
-    if shared and "short_planning" in shared:
-        previous_planning_data = shared["short_planning"]
-        if isinstance(previous_planning_data, str):
-            previous_planning = previous_planning_data
-
-    # 如果是技术规划阶段，检查是否已有工具推荐结果（可选）
-    # 注意：tool_recommend 可能返回空结果（没有合适的工具），这是正常情况
-    has_tool_recommendations = shared and shared.get("recommended_tools")
-    if planning_stage == "technical" and shared:
-        # 记录工具推荐状态，但不强制要求
-        tool_recommend_status = "已获取工具推荐" if has_tool_recommendations else "未找到合适工具或未调用工具推荐"
-        shared["tool_recommend_status"] = tool_recommend_status
-
-    # 如果没有用户需求且没有改进点，但有shared上下文，则可以继续执行
-    if not user_requirements and not improvement_points and not shared:
-        return {
-            "success": False,
-            "error": "user_requirements or improvement_points is required when no project context is available"
+            "error": "user_requirements is required"
         }
 
     try:
-        # 直接在shared字典中添加工具参数，避免数据隔离
-        if shared is None:
-            shared = {}
+        # 创建独立的 flow_shared，实现原子化
+        flow_shared = {
+            "user_requirements": user_requirements,
+            "previous_planning": previous_planning,
+            "improvement_points": improvement_points,
+            "recommended_tools": recommended_tools,
+            "research_findings": research_findings,
+            "language": shared.get("language") if shared else None,
+            "streaming_session": shared.get("streaming_session") if shared else None  # 确保 SSE 支持
+        }
 
-        # 添加工具参数到shared字典
-        shared["user_requirements"] = user_requirements
-        shared["previous_planning"] = previous_planning
-        shared["improvement_points"] = improvement_points
-        shared["planning_stage"] = planning_stage  # 添加规划阶段参数
-
-        # 如果没有明确的用户需求，但有推荐工具，基于现有状态进行规划优化
-        if not user_requirements and shared.get("recommended_tools"):
-            shared["user_requirements"] = "基于推荐工具优化项目规划"
-
-        # 直接使用shared字典执行流程，确保状态传递
+        # 执行规划流程
         flow = ShortPlanningFlow()
-        result = await flow.run_async(shared)
+        result = await flow.run_async(flow_shared)
 
         # 检查流程是否成功完成（返回"planning_complete"表示成功）
         if result == "planning_complete":
-            # 从shared字典中获取结果（PocketFlow已经直接修改了shared）
-            short_planning = shared.get("short_planning", {})
+            # 从 flow_shared 中获取结果
+            short_planning = flow_shared.get("short_planning", "")
 
             return {
                 "success": True,
@@ -266,7 +250,7 @@ async def _execute_short_planning(arguments: Dict[str, Any], shared: Dict[str, A
             }
         else:
             # 流程失败或返回错误
-            error_msg = shared.get('planning_error', shared.get('short_planning_flow_error', f"短期规划执行失败，返回值: {result}"))
+            error_msg = flow_shared.get('planning_error', flow_shared.get('short_planning_flow_error', f"短期规划执行失败，返回值: {result}"))
             return {
                 "success": False,
                 "error": error_msg,
@@ -275,7 +259,8 @@ async def _execute_short_planning(arguments: Dict[str, Any], shared: Dict[str, A
     except Exception as e:
         return {
             "success": False,
-            "error": f"短期规划执行异常: {str(e)}"
+            "error": f"短期规划执行异常: {str(e)}",
+            "tool_name": "short_planning"
         }
 
 
