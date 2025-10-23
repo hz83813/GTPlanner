@@ -90,6 +90,7 @@ class StatelessGTPlanner:
             orchestrator = ReActOrchestratorFlow()
 
             # 4. 执行处理（完全独立的执行环境）
+            start_time = asyncio.get_event_loop().time()
             await orchestrator.run_async(shared)
 
             # 5. 计算执行时间
@@ -187,14 +188,6 @@ class StatelessGTPlanner:
                 session.session_id,
                 complete_message,
                 message_metadata
-            )
-        )
-
-        # 追加一条状态事件用于定位尾部卡顿（SSE 调试）
-        await session.emit_event(
-            StreamEventBuilder.processing_status(
-                session.session_id,
-                "[debug] LLM output completed"
             )
         )
 
