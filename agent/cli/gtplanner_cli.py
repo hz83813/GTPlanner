@@ -170,6 +170,7 @@ class ModernGTPlannerCLI:
 
         self.console.print(Panel(
             Markdown(welcome_text),
+            title="🚀 GTPlanner CLI",
             border_style="blue"
         ))
 
