@@ -210,7 +210,7 @@ async def chat_agent_stream(request: AgentContextRequest):
                 heartbeat_counter = 0
                 while True:
                     try:
-                        # 等待数据，缩短超时时间以减少延迟
+                        # 等待数据，使用较短超时以快速检测处理完成
                         data = await asyncio.wait_for(sse_queue.get(), timeout=0.1)
                         if data is None:  # 结束标记
                             break
@@ -219,9 +219,9 @@ async def chat_agent_stream(request: AgentContextRequest):
                         # 检查是否处理完成
                         if processing_complete:
                             break
-                        # 每10次超时发送一次心跳（每1秒）
+                        # 每100次超时发送一次心跳（每10秒）
                         heartbeat_counter += 1
-                        if heartbeat_counter >= 10:
+                        if heartbeat_counter >= 100:
                             heartbeat = f"event: heartbeat\ndata: {{\"timestamp\": \"{datetime.now().isoformat()}\"}}\n\n"
                             yield heartbeat
                             heartbeat_counter = 0
